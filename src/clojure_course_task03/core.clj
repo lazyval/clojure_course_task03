@@ -1,6 +1,9 @@
 (ns clojure-course-task03.core
   (:require [clojure.set]))
 
+
+
+
 (defn join* [table-name conds]
   (let [op (first conds)
         f1 (name (nth conds 1))
@@ -239,4 +242,61 @@
   ;;    proposal-fields-var и agents-fields-var.
   ;;    Таким образом, функция select, вызванная внутри with-user, получает
   ;;    доступ ко всем необходимым переменным вида <table-name>-fields-var.
+  )
+
+;; todo make a bunch of defs
+(defmacro group [name & ps]
+    `(def 
+       ~(symbol name) 
+       ~(apply merge 
+               (for [[table-name _ can-read-cols] (partition 3 ps)] 
+                 {(keyword table-name) (set (map keyword can-read-cols))}))))
+
+
+
+(defmacro user [name [_ & groups :as all]]
+    `(def 
+       ~(symbol name) 
+       ~(apply merge (for [g groups] (symbol g)))))
+
+
+
+(defmacro with-user [user [_ table-name _ :as body]]
+  `(let [~(symbol (str table-name "-fields-var")) (~(keyword table-name) ~user)]
+     ~body))
+
+(comment
+  (macroexpand '(user Ivanov
+        (belongs-to Agent)))
+  
+  
+  (macroexpand '(group Agent
+         proposal -> [person, phone, address, price]
+         agents -> [clients_id, proposal_id, agent]))
+  
+  (group Agent
+         proposal -> [person, phone, address, price]
+         agents -> [clients_id, proposal_id, agent])
+  
+  (user Ivanov
+        (belongs-to Agent))
+  
+  
+  (macroexpand '(with-user Ivanov
+                     (select proposal
+                             (fields :person, :phone)
+                             (where {:price 11})
+                             (join agents (= agents.proposal_id proposal.id))
+                             (order :f3)
+                             (limit 5)
+                             (offset 5))))
+  
+  (with-user Ivanov
+                     (select proposal
+                             (fields :person, :phone)
+                             (where {:price 11})
+                             (join agents (= agents.proposal_id proposal.id))
+                             (order :f3)
+                             (limit 5)
+                             (offset 5)))
   )

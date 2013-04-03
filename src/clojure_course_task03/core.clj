@@ -1,5 +1,6 @@
 (ns clojure-course-task03.core
-  (:require [clojure.set]))
+  (:require [clojure.set])
+  (:use [clojure.string :only [lower-case replace]]))
 
 
 
@@ -244,26 +245,32 @@
   ;;    доступ ко всем необходимым переменным вида <table-name>-fields-var.
   )
 
-;; todo make a bunch of defs
+
 (defmacro group [name & ps]
-    `(def 
-       ~(symbol name) 
-       ~(apply merge 
-               (for [[table-name _ can-read-cols] (partition 3 ps)] 
-                 {(keyword table-name) (set (map keyword can-read-cols))}))))
+    `(do 
+       ~@(for [[table-name _ can-read-fields] (partition 3 ps)]
+         `(def 
+          ~(symbol (str "-" (lower-case name) "-" table-name "-fields")) 
+          ~(set (map keyword can-read-fields))))))
 
+(defn- fields-vars-for [group]
+  (->> 
+    (keys (ns-publics *ns*)) 
+    (filter (fn [s] (.startsWith (str s) (str "-" (lower-case group)))))))
 
-
-(defmacro user [name [_ & groups :as all]]
-    `(def 
-       ~(symbol name) 
-       ~(apply merge (for [g groups] (symbol g)))))
-
-
+(defmacro user [name [_ & groups]]
+  `(do 
+    ~@(for [g groups
+            k (fields-vars-for g)
+            :let [var-name (.replaceFirst (str k) (str "-" (lower-case g)) (str name))]] 
+        `(def ~(symbol var-name) ~k))))
 
 (defmacro with-user [user [_ table-name _ :as body]]
-  `(let [~(symbol (str table-name "-fields-var")) (~(keyword table-name) ~user)]
+  `(let [
+         ~(symbol (str table-name "-fields-var")) 
+         ~(symbol (str user "-" table-name "-fields"))]
      ~body))
+
 
 (comment
   (macroexpand '(user Ivanov

@@ -207,52 +207,24 @@
   
   )
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; TBD: Implement the following macros
-;;
-
-(defmacro group [name & body]
-  ;; Пример
-  ;; (group Agent
-  ;;      proposal -> [person, phone, address, price]
-  ;;      agents -> [clients_id, proposal_id, agent])
-  ;; 1) Создает группу Agent
-  ;; 2) Запоминает, какие таблицы (и какие колонки в таблицах)
-  ;;    разрешены в данной группе.
-  ;; 3) Создает следующие функции
-  ;;    (select-agent-proposal) ;; select person, phone, address, price from proposal;
-  ;;    (select-agent-agents)  ;; select clients_id, proposal_id, agent from agents;
-  )
-
-(defmacro user [name & body]
-  ;; Пример
-  ;; (user Ivanov
-  ;;     (belongs-to Agent))
-  ;; Создает переменные Ivanov-proposal-fields-var = [:person, :phone, :address, :price]
-  ;; и Ivanov-agents-fields-var = [:clients_id, :proposal_id, :agent]
-  ;; Сохраняет эти же переменные в атоме *user-tables-vars*.
-  )
-
-(defmacro with-user [name & body]
-  ;; Пример
-  ;; (with-user Ivanov
-  ;;   . . .)
-  ;; 1) Находит все переменные, начинающиеся со слова Ivanov, в *user-tables-vars*
-  ;;    (Ivanov-proposal-fields-var и Ivanov-agents-fields-var)
-  ;; 2) Создает локальные привязки без префикса Ivanov-:
-  ;;    proposal-fields-var и agents-fields-var.
-  ;;    Таким образом, функция select, вызванная внутри with-user, получает
-  ;;    доступ ко всем необходимым переменным вида <table-name>-fields-var.
-  )
-
-
-(defmacro group [name & ps]
+;; actually I think defining new vars on every step is overkill and we could do better with something like
+;; https://github.com/lazyval/clojure_course_task03/commit/352ace438cd67e834bcee501fc1d03ffa55a9404#L0R248
+;; sadly test #2 relies on defs 
+(defmacro group [group-name & pairs]
     `(do 
-       ~@(for [[table-name _ can-read-fields] (partition 3 ps)]
-         `(def 
-          ~(symbol (str "-" (lower-case name) "-" table-name "-fields")) 
-          ~(set (map keyword can-read-fields))))))
+       ~@(for [[table-name _ can-read-fields] (partition 3 pairs)
+               :let [name (lower-case group-name), 
+                     delimited-fields (apply str (interpose "," can-read-fields))]]
+         [`(def 
+          ~(symbol (str "-" name "-" table-name "-fields")) 
+          ~(set (map keyword can-read-fields)))
+          
+          `(defn 
+          ~(symbol (str "select-" name "-" table-name)) []
+          ~(str "SELECT " delimited-fields " FROM " table-name " "))])))
 
+;; I've decided not to use atoms to store thoose vars, and instead I'm looking 
+;; up variables directly in namespace -- this approach seems to be much more concise
 (defn- fields-vars-for [group]
   (->> 
     (keys (ns-publics *ns*)) 
@@ -261,49 +233,12 @@
 (defmacro user [name [_ & groups]]
   `(do 
     ~@(for [g groups
-            k (fields-vars-for g)
-            :let [var-name (.replaceFirst (str k) (str "-" (lower-case g)) (str name))]] 
-        `(def ~(symbol var-name) ~k))))
+            v (fields-vars-for g)
+            :let [var-name (.replaceFirst (str v) (str "-" (lower-case g)) (str name))]] 
+        `(def ~(symbol var-name) ~v))))
 
 (defmacro with-user [user [_ table-name _ :as body]]
   `(let [
          ~(symbol (str table-name "-fields-var")) 
          ~(symbol (str user "-" table-name "-fields"))]
      ~body))
-
-
-(comment
-  (macroexpand '(user Ivanov
-        (belongs-to Agent)))
-  
-  
-  (macroexpand '(group Agent
-         proposal -> [person, phone, address, price]
-         agents -> [clients_id, proposal_id, agent]))
-  
-  (group Agent
-         proposal -> [person, phone, address, price]
-         agents -> [clients_id, proposal_id, agent])
-  
-  (user Ivanov
-        (belongs-to Agent))
-  
-  
-  (macroexpand '(with-user Ivanov
-                     (select proposal
-                             (fields :person, :phone)
-                             (where {:price 11})
-                             (join agents (= agents.proposal_id proposal.id))
-                             (order :f3)
-                             (limit 5)
-                             (offset 5))))
-  
-  (with-user Ivanov
-                     (select proposal
-                             (fields :person, :phone)
-                             (where {:price 11})
-                             (join agents (= agents.proposal_id proposal.id))
-                             (order :f3)
-                             (limit 5)
-                             (offset 5)))
-  )

@@ -207,6 +207,10 @@
   
   )
 
+(defn- symbol-str [& chunks]
+  "shortcut for (symbol (str ...))"
+  (symbol (apply str chunks)))
+
 ;; actually I think defining new vars on every step is overkill and we could do better with something like
 ;; https://github.com/lazyval/clojure_course_task03/commit/352ace438cd67e834bcee501fc1d03ffa55a9404#L0R248
 ;; sadly test #2 relies on defs 
@@ -216,11 +220,11 @@
                :let [name (lower-case group-name), 
                      delimited-fields (apply str (interpose "," can-read-fields))]]
          [`(def 
-          ~(symbol (str "-" name "-" table-name "-fields")) 
+          ~(symbol-str "-" name "-" table-name "-fields") 
           ~(set (map keyword can-read-fields)))
           
           `(defn 
-          ~(symbol (str "select-" name "-" table-name)) []
+          ~(symbol-str "select-" name "-" table-name) []
           ~(str "SELECT " delimited-fields " FROM " table-name " "))])))
 
 ;; I've decided not to use atoms to store thoose vars, and instead I'm looking 
@@ -239,6 +243,6 @@
 
 (defmacro with-user [user [_ table-name _ :as body]]
   `(let [
-         ~(symbol (str table-name "-fields-var")) 
-         ~(symbol (str user "-" table-name "-fields"))]
+         ~(symbol-str table-name "-fields-var") 
+         ~(symbol-str user "-" table-name "-fields")]
      ~body))
